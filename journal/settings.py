@@ -59,7 +59,12 @@ MIDDLEWARE = [
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "bunujournal.pythonanywhere.com"
+    "bunujournal.pythonanywhere.com",
+    "https://journal-rouge-seven.vercel.app"
+]
+CSRF_TRUSTED_ORIGINS = [
+    "https://journal-rouge-seven.vercel.app"
+
 ]
 
 CORS_ALLOW_CREDENTIALS = True
