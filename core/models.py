@@ -9,39 +9,6 @@ class JournalEntry(models.Model):
         ('', 'Not Set'),
     ]
 
-    ARRAY_CHOICES = [
-        ('FVG', 'Fair Value Gap'),
-        ('Asian High Low', 'Asian High Low'),
-        ('OB', 'Order Block'),
-        ('', 'Not Set'),
-    ]
-
-    EMOTION_CHOICES = [
-        ('Confident', 'Confident'),
-        ('Anxious', 'Anxious'),
-        ('Excited', 'Excited'),
-        ('Fearful', 'Fearful'),
-        ('Greedy', 'Greedy'),
-        ('Patient', 'Patient'),
-        ('Frustrated', 'Frustrated'),
-        ('Calm', 'Calm'),
-        ('Overconfident', 'Overconfident'),
-        ('Disciplined', 'Disciplined'),
-        ('FOMO', 'FOMO'),
-        ('Revenge Trading', 'Revenge Trading'),
-        ('Neutral', 'Neutral'),
-        ('', 'Not Set'),
-    ]
-    RESULT = [
-        ('Win', 'Win'),
-        ('Loss', 'Loss'),
-        ('Break Even', 'Break Even'),
-        ('Not Triggered', 'Not Triggered'),
-        ('Missed', 'Missed'),
-        ('Monday', 'Monday'),
-        ('News', 'News')
-    ]
-
     # Basic fields
     date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -68,10 +35,18 @@ class JournalEntry(models.Model):
 
     # Psychology and analysis
     emotions = models.TextField(
-        blank=True, help_text="Comma-separated emotion values")
-    mistake = models.TextField(blank=True, help_text="What went wrong?")
+        blank=True, null=True, help_text="Comma-separated emotion values")
+    before_trade_emotions = models.TextField(
+        blank=True, null=True, help_text="Comma-separated emotion values")
+    in_trade_emotions = models.TextField(
+        blank=True, null=True, help_text="Comma-separated emotion values")
+    after_trade_emotions = models.TextField(
+        blank=True, null=True, help_text="Comma-separated emotion values")
+
+    mistake = models.TextField(
+        blank=True, null=True, help_text="Comma-separated emotion values")
     reason = models.TextField(
-        blank=True, help_text="Why did you take this trade?")
+        blank=True, null=True, help_text="Why did you take this trade?")
 
     class Meta:
         ordering = ['-date', '-created_at']
