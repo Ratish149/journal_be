@@ -15,32 +15,7 @@ class JournalEntryAdmin(ModelAdmin):
     list_filter = [
         'bias', 'array', 'emotions', 'date', 'created_at'
     ]
-    search_fields = [
-        'reason', 'mistake', 'ltf', 'htf'
-    ]
-    readonly_fields = ['created_at', 'updated_at']
     date_hierarchy = 'date'
-    list_per_page = 25
-
-    fieldsets = (
-        ('Basic Information', {
-            'fields': ('date',)
-        }),
-        ('Trading Details', {
-            'fields': ('bias', 'array', 'pnl')
-        }),
-        ('Chart URLs', {
-            'fields': ('ltf', 'htf'),
-            'description': 'Enter chart URLs for LTF and HTF'
-        }),
-        ('Analysis', {
-            'fields': ('emotions', 'reason', 'mistake')
-        }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-    )
 
 
 @admin.register(TradingStats)
