@@ -3,11 +3,6 @@ from django.db import models
 
 
 class JournalEntry(models.Model):
-    BIAS_CHOICES = [
-        ('buy', 'Buy'),
-        ('sell', 'Sell'),
-        ('', 'Not Set'),
-    ]
 
     # Basic fields
     date = models.DateField(null=True, blank=True)
@@ -19,7 +14,7 @@ class JournalEntry(models.Model):
     htf = models.TextField(blank=True, help_text="HTF Chart URL")
 
     # Trading details
-    bias = models.CharField(max_length=10, choices=BIAS_CHOICES, blank=True)
+    bias = models.CharField(max_length=255, null=True, blank=True)
     array = models.TextField(
         blank=True, help_text="Comma-separated array values")
     results = models.TextField(

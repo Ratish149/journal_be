@@ -194,8 +194,8 @@ def trading_summary_view(request):
                 100) if total_entries > 0 else 0
 
     # Bias analysis
-    buy_trades = entries.filter(bias='buy')
-    sell_trades = entries.filter(bias='sell')
+    buy_trades = entries.filter(Q(bias='buy') | Q(bias='Buy'))
+    sell_trades = entries.filter(Q(bias='sell') | Q(bias='Sell'))
     buy_pnl = buy_trades.aggregate(Sum('pnl'))['pnl__sum'] or 0
     sell_pnl = sell_trades.aggregate(Sum('pnl'))['pnl__sum'] or 0
 

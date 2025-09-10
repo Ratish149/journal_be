@@ -12,9 +12,8 @@ class JournalEntryAdmin(ModelAdmin):
         'id', 'date', 'bias', 'array', 'pnl',
         'emotions', 'created_at'
     ]
-    list_filter = [
-        'bias', 'array', 'emotions', 'date', 'created_at'
-    ]
+    list_filter = ['date', 'created_at'
+                   ]
     date_hierarchy = 'date'
 
 
