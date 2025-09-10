@@ -10,7 +10,7 @@ class JournalEntrySerializer(serializers.ModelSerializer):
         model = JournalEntry
         fields = [
             'id', 'date', 'ltf', 'htf', 'bias', 'array',
-            'pnl', 'emotions', 'mistake', 'reason', 'results',
+            'pnl', 'emotions', 'mistake', 'before_trade_emotions', 'in_trade_emotions', 'after_trade_emotions', 'reason', 'results',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
