@@ -9,7 +9,7 @@ class JournalEntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = JournalEntry
         fields = [
-            'id', 'date', 'ltf', 'htf', 'bias', 'array',
+            'id', 'date', 'ltf', 'htf', 'bias', 'array', 'kill_zone',
             'pnl', 'emotions', 'mistake', 'before_trade_emotions', 'in_trade_emotions', 'after_trade_emotions', 'reason', 'results',
             'created_at', 'updated_at'
         ]

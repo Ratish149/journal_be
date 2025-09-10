@@ -47,6 +47,8 @@ class JournalEntry(models.Model):
         blank=True, null=True, help_text="Comma-separated emotion values")
     reason = models.TextField(
         blank=True, null=True, help_text="Why did you take this trade?")
+    kill_zone = models.TextField(
+        blank=True, null=True)
 
     class Meta:
         ordering = ['-date', '-created_at']
