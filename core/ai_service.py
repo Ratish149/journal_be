@@ -73,12 +73,12 @@ def analyze_trade_images(ltf_url, htf_url):
                         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
                         "Referer": "https://www.tradingview.com/",
                     }
-                    # Bypass potential system proxy issues using proxies={"http": None, "https": None}
+                    # PythonAnywhere free accounts require using their proxy.
+                    # We remove the manual proxy override to allow system defaults.
                     response = requests.get(
                         url,
                         headers=headers,
                         timeout=15,
-                        proxies={"http": None, "https": None},
                     )
                     if response.status_code == 200:
                         content_type = response.headers.get("Content-Type", "").lower()
@@ -93,13 +93,23 @@ def analyze_trade_images(ltf_url, htf_url):
                             )
                             if img_match:
                                 direct_url = img_match.group(0)
-                                response = requests.get(
-                                    direct_url,
-                                    headers=headers,
-                                    timeout=10,
-                                    proxies={"http": None, "https": None},
-                                )
-                                if response.status_code != 200:
+                                try:
+                                    response = requests.get(
+                                        direct_url,
+                                        headers=headers,
+                                        timeout=10,
+                                    )
+                                    if response.status_code == 403:
+                                        print(
+                                            f"Access forbidden to {direct_url}. This is likely a whitelist restriction on your hosting provider (e.g., PythonAnywhere free tier)."
+                                        )
+                                        return None
+                                    if response.status_code != 200:
+                                        return None
+                                except requests.exceptions.ProxyError:
+                                    print(
+                                        f"Proxy error connecting to {direct_url}. If you are on PythonAnywhere, this domain might need to be whitelisted."
+                                    )
                                     return None
                             else:
                                 print(f"No image URL found in HTML for {url}")
