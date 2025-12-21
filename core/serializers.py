@@ -20,6 +20,8 @@ class JournalEntrySerializer(serializers.ModelSerializer):
             "date",
             "ltf",
             "htf",
+            "ltf_image",
+            "htf_image",
             "bias",
             "array",
             "kill_zone",

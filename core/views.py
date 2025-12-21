@@ -275,8 +275,13 @@ class AIPredictionView(generics.GenericAPIView):
     def post(self, request, *args, **kwargs):
         instance = self.get_object()
 
-        # Analyze images
-        bias, analysis = analyze_trade_images(instance.ltf, instance.htf)
+        # Analyze images - pass both URLs and file objects
+        bias, analysis = analyze_trade_images(
+            ltf_url=instance.ltf,
+            htf_url=instance.htf,
+            ltf_file=instance.ltf_image,
+            htf_file=instance.htf_image,
+        )
 
         # Save results
         instance.ai_bias_prediction = bias

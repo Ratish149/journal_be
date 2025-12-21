@@ -30,9 +30,10 @@ def get_gemini_key():
     return selected_key_obj.key
 
 
-def analyze_trade_images(ltf_url, htf_url):
+def analyze_trade_images(ltf_url=None, htf_url=None, ltf_file=None, htf_file=None):
     """
     Analyzes LTF and HTF images using Gemini and returns a bias prediction and analysis.
+    Prioritizes uploaded files over URLs.
     Supports API key rotation on failure.
     """
     error_msg = "Gemini API key is not configured or all keys failed."
@@ -63,8 +64,16 @@ def analyze_trade_images(ltf_url, htf_url):
 
             images = []
 
-            # Helper to fetch image from URL
-            def fetch_image(url):
+            # Helper to open image from file or URL
+            def get_image(file_obj, url):
+                # 1. Try file object first (uploaded file)
+                if file_obj:
+                    try:
+                        return Image.open(file_obj)
+                    except Exception as e:
+                        print(f"Error opening uploaded file: {e}")
+
+                # 2. Try URL if no file or file failed
                 if not url:
                     return None
                 try:
@@ -74,7 +83,6 @@ def analyze_trade_images(ltf_url, htf_url):
                         "Referer": "https://www.tradingview.com/",
                     }
                     # PythonAnywhere free accounts require using their proxy.
-                    # We remove the manual proxy override to allow system defaults.
                     response = requests.get(
                         url,
                         headers=headers,
@@ -120,8 +128,8 @@ def analyze_trade_images(ltf_url, htf_url):
                     print(f"Error fetching image from {url}: {e}")
                 return None
 
-            htf_img = fetch_image(htf_url)
-            ltf_img = fetch_image(ltf_url)
+            htf_img = get_image(htf_file, htf_url)
+            ltf_img = get_image(ltf_file, ltf_url)
 
             if htf_img:
                 images.append(htf_img)
@@ -131,7 +139,7 @@ def analyze_trade_images(ltf_url, htf_url):
             if not images:
                 return (
                     "Unknown",
-                    "No valid images found at the provided URLs to analyze.",
+                    "No valid images (uploaded or URLs) found to analyze.",
                 )
 
             response = model.generate_content([prompt] + images)

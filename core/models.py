@@ -11,6 +11,20 @@ class JournalEntry(models.Model):
     ltf = models.TextField(blank=True, help_text="LTF Chart URL")
     htf = models.TextField(blank=True, help_text="HTF Chart URL")
 
+    # File based image fields
+    ltf_image = models.FileField(
+        upload_to="trade_charts/ltf/",
+        null=True,
+        blank=True,
+        help_text="LTF Chart Image",
+    )
+    htf_image = models.FileField(
+        upload_to="trade_charts/htf/",
+        null=True,
+        blank=True,
+        help_text="HTF Chart Image",
+    )
+
     # Trading details
     bias = models.CharField(max_length=255, null=True, blank=True)
     array = models.TextField(blank=True, help_text="Comma-separated array values")
