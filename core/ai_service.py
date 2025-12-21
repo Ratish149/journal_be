@@ -71,26 +71,38 @@ def analyze_trade_images(ltf_url, htf_url):
                     headers = {
                         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                        "Referer": "https://www.tradingview.com/",
                     }
-                    response = requests.get(url, headers=headers, timeout=15)
+                    # Bypass potential system proxy issues using proxies={"http": None, "https": None}
+                    response = requests.get(
+                        url,
+                        headers=headers,
+                        timeout=15,
+                        proxies={"http": None, "https": None},
+                    )
                     if response.status_code == 200:
                         content_type = response.headers.get("Content-Type", "").lower()
 
                         if "text/html" in content_type:
                             import re
 
+                            # Support both single and double quotes for the snapshot URL
                             img_match = re.search(
-                                r'https://s3.tradingview.com/snapshots/[^"]+\.png',
+                                r'https://s3\.tradingview\.com/snapshots/[^"\'\s>]+\.png',
                                 response.text,
                             )
                             if img_match:
                                 direct_url = img_match.group(0)
                                 response = requests.get(
-                                    direct_url, headers=headers, timeout=10
+                                    direct_url,
+                                    headers=headers,
+                                    timeout=10,
+                                    proxies={"http": None, "https": None},
                                 )
                                 if response.status_code != 200:
                                     return None
                             else:
+                                print(f"No image URL found in HTML for {url}")
                                 return None
 
                         return Image.open(BytesIO(response.content))
