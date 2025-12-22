@@ -1,15 +1,11 @@
-from io import BytesIO
-
 import google.generativeai as genai
-import requests
 from django.utils import timezone
-from PIL import Image
 
-# Fallback API Key in case database is empty
-DEFAULT_KEY = "AIzaSyDimiOmGZKUAGO-ce1T9fNVmI49ECNcdDw"
+# Fallback API Key - REMOVED for security
+# DEFAULT_KEY = ""
 
 
-def get_gemini_key():
+def get_gemini_key(excluded_keys=None):
     """
     Fetches an active Gemini API key from the database using a round-robin approach.
     Updates the last_used timestamp.
@@ -17,10 +13,15 @@ def get_gemini_key():
     from core.models import GeminiApiKey
 
     # Get active keys ordered by last_used (least recently used first)
-    active_keys = GeminiApiKey.objects.filter(is_active=True).order_by("last_used")
+    queryset = GeminiApiKey.objects.filter(is_active=True)
+
+    if excluded_keys:
+        queryset = queryset.exclude(key__in=excluded_keys)
+
+    active_keys = queryset.order_by("last_used")
 
     if not active_keys.exists():
-        return DEFAULT_KEY
+        return None
 
     selected_key_obj = active_keys.first()
     selected_key_obj.last_used = timezone.now()
@@ -30,17 +31,17 @@ def get_gemini_key():
     return selected_key_obj.key
 
 
-def analyze_trade_images(ltf_url=None, htf_url=None, ltf_file=None, htf_file=None):
+def analyze_trade_images(ltf_url=None, htf_url=None):
     """
-    Analyzes LTF and HTF images using Gemini and returns a bias prediction and analysis.
-    Prioritizes uploaded files over URLs.
-    Supports API key rotation on failure.
+    Analyzes LTF and HTF URLs using Gemini and returns a bias prediction and analysis.
+    Sends URLs directly to the model in the prompt.
     """
     error_msg = "Gemini API key is not configured or all keys failed."
-    max_retries = 3  # Try up to 3 different keys if available
+    max_retries = 3
+    failed_keys = []
 
     for _ in range(max_retries):
-        api_key = get_gemini_key()
+        api_key = get_gemini_key(excluded_keys=failed_keys)
         if not api_key:
             break
 
@@ -48,12 +49,13 @@ def analyze_trade_images(ltf_url=None, htf_url=None, ltf_file=None, htf_file=Non
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel("gemini-2.5-flash")
 
-            prompt = """
-            You are an expert trading analyst. I am providing you with two chart images for a trade journal entry:
-            1. Higher Time Frame (HTF)
-            2. Lower Time Frame (LTF)
+            prompt = f"""
+            You are an expert trading analyst. I am providing you with two chart URLs for a trade journal entry:
             
-            Please analyze these images and provide:
+            1. Higher Time Frame (HTF): {htf_url}
+            2. Lower Time Frame (LTF): {ltf_url}
+            
+            Please access these URLs to view the charts, then analyze them to provide:
             1. Bias: (one word: Buy, Sell, or Neutral)
             2. Analysis: A concise explanation of why you see this bias based on market structure, supply/demand, or technical patterns visible in the charts.
             
@@ -62,87 +64,13 @@ def analyze_trade_images(ltf_url=None, htf_url=None, ltf_file=None, htf_file=Non
             ANALYSIS: [Your analysis]
             """
 
-            images = []
-
-            # Helper to open image from file or URL
-            def get_image(file_obj, url):
-                # 1. Try file object first (uploaded file)
-                if file_obj:
-                    try:
-                        return Image.open(file_obj)
-                    except Exception as e:
-                        print(f"Error opening uploaded file: {e}")
-
-                # 2. Try URL if no file or file failed
-                if not url:
-                    return None
-                try:
-                    headers = {
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-                        "Referer": "https://www.tradingview.com/",
-                    }
-                    # PythonAnywhere free accounts require using their proxy.
-                    response = requests.get(
-                        url,
-                        headers=headers,
-                        timeout=15,
-                    )
-                    if response.status_code == 200:
-                        content_type = response.headers.get("Content-Type", "").lower()
-
-                        if "text/html" in content_type:
-                            import re
-
-                            # Support both single and double quotes for the snapshot URL
-                            img_match = re.search(
-                                r'https://s3\.tradingview\.com/snapshots/[^"\'\s>]+\.png',
-                                response.text,
-                            )
-                            if img_match:
-                                direct_url = img_match.group(0)
-                                try:
-                                    response = requests.get(
-                                        direct_url,
-                                        headers=headers,
-                                        timeout=10,
-                                    )
-                                    if response.status_code == 403:
-                                        print(
-                                            f"Access forbidden to {direct_url}. This is likely a whitelist restriction on your hosting provider (e.g., PythonAnywhere free tier)."
-                                        )
-                                        return None
-                                    if response.status_code != 200:
-                                        return None
-                                except requests.exceptions.ProxyError:
-                                    print(
-                                        f"Proxy error connecting to {direct_url}. If you are on PythonAnywhere, this domain might need to be whitelisted."
-                                    )
-                                    return None
-                            else:
-                                print(f"No image URL found in HTML for {url}")
-                                return None
-
-                        return Image.open(BytesIO(response.content))
-                except Exception as e:
-                    print(f"Error fetching image from {url}: {e}")
-                return None
-
-            htf_img = get_image(htf_file, htf_url)
-            ltf_img = get_image(ltf_file, ltf_url)
-
-            if htf_img:
-                images.append(htf_img)
-            if ltf_img:
-                images.append(ltf_img)
-
-            if not images:
+            if not ltf_url and not htf_url:
                 return (
                     "Unknown",
-                    "No valid images (uploaded or URLs) found to analyze.",
+                    "No URLs provided to analyze.",
                 )
 
-            response = model.generate_content([prompt] + images)
+            response = model.generate_content(prompt)
             content = response.text
 
             bias = "Neutral"
@@ -158,9 +86,10 @@ def analyze_trade_images(ltf_url=None, htf_url=None, ltf_file=None, htf_file=Non
 
         except Exception as e:
             error_msg = str(e)
-            print(
-                f"API attempt failed with key starting with {api_key[:5]}: {error_msg}"
-            )
+
+            print(f"API attempt failed with key {api_key}: {error_msg}")
+            failed_keys.append(api_key)  # Track failed key to avoid reusing it
+
             # If it's a quota or auth error, continue to try next key
             if (
                 "quota" in error_msg.lower()
@@ -182,9 +111,10 @@ def get_chat_response(entry, user_message, chat_history):
     """
     error_msg = "Gemini API key is not configured or all keys failed."
     max_retries = 3
+    failed_keys = []
 
     for _ in range(max_retries):
-        api_key = get_gemini_key()
+        api_key = get_gemini_key(excluded_keys=failed_keys)
         if not api_key:
             break
 
@@ -205,20 +135,24 @@ def get_chat_response(entry, user_message, chat_history):
             context = f"""
             You are a trading mentor. Provide a short, simple, and direct explanation to the student.
             Avoid long-winded technical jargon unless necessary. Focus on clarity and brevity.
-            
+            I am a girl trader.
             Language Style:
             If the student asks in Romanized Nepali (mix of English and Nepali), respond in the same English-Nepali style. 
             Do not use Devanagari script (pure Nepali). Mirror the student's language and tone.
             {previous_ref}
-            
             Trade Details:
             - Date: {entry.date}
             - Bias: {entry.bias}
+            - Result: {entry.results}
             - P&L: {entry.pnl}
+            - Kill Zone: {entry.kill_zone}
+            - Array: {entry.array}
             - Reason: {entry.reason}
             - Mistake: {entry.mistake}
-            - AI Bias Prediction: {entry.ai_bias_prediction}
-            - AI Analysis: {entry.ai_analysis}
+            - Emotions: {entry.emotions}
+            - Before Trade Emotions: {entry.before_trade_emotions}
+            - In Trade Emotions: {entry.in_trade_emotions}
+            - After Trade Emotions: {entry.after_trade_emotions}
             """
 
             messages = [
@@ -234,9 +168,9 @@ def get_chat_response(entry, user_message, chat_history):
 
         except Exception as e:
             error_msg = str(e)
-            print(
-                f"Chat API attempt failed with key starting with {api_key[:5]}: {error_msg}"
-            )
+            print(f"Chat API attempt failed with key {api_key}: {error_msg}")
+            failed_keys.append(api_key)
+
             if (
                 "quota" in error_msg.lower()
                 or "429" in error_msg
