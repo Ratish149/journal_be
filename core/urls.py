@@ -5,6 +5,7 @@ from .views import (
     ChatListCreateView,
     JournalEntryListCreateView,
     JournalEntryRetrieveUpdateDestroyView,
+    dashboard_view,
     refresh_stats_view,
     trading_stats_view,
     trading_summary_view,
@@ -25,6 +26,7 @@ urlpatterns = [
     # Statistics and analytics
     path("journal/stats/", trading_stats_view, name="trading-stats"),
     path("journal/summary/", trading_summary_view, name="trading-summary"),
+    path("journal/dashboard/", dashboard_view, name="trading-dashboard"),
     path("journal/refresh-stats/", refresh_stats_view, name="refresh-stats"),
     # AI Features
     path(

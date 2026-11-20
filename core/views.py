@@ -1,4 +1,6 @@
+from collections import defaultdict
 from datetime import datetime
+from decimal import Decimal
 
 from django.db.models import Count, Q, Sum
 from rest_framework import generics
@@ -12,6 +14,55 @@ from .serializers import (
     JournalEntrySerializer,
     TradingStatsSerializer,
 )
+
+
+def _filter_entries_queryset(request):
+    """Filter journal entries by month/year/all query params."""
+    queryset = JournalEntry.objects.all()
+    month = request.GET.get("month")
+    year = request.GET.get("year")
+    show_all = request.GET.get("all", "false").lower() == "true"
+
+    if show_all:
+        return queryset, {"all": True}
+
+    if month and year:
+        try:
+            month = int(month)
+            year = int(year)
+            if month < 1 or month > 12:
+                raise ValueError("Month must be between 1 and 12")
+            queryset = queryset.filter(date__year=year, date__month=month)
+            return queryset, {
+                "month": month,
+                "year": year,
+                "month_name": datetime(year, month, 1).strftime("%B %Y"),
+            }
+        except ValueError:
+            return JournalEntry.objects.none(), None
+
+    current_date = datetime.now()
+    queryset = queryset.filter(
+        date__year=current_date.year, date__month=current_date.month
+    )
+    return queryset, {
+        "month": current_date.month,
+        "year": current_date.year,
+        "month_name": current_date.strftime("%B %Y"),
+    }
+
+
+def _is_open_trade(entry):
+    results = (entry.results or "").lower()
+    return "open" in [part.strip() for part in results.split(",") if part.strip()]
+
+
+def _to_float(value):
+    if value is None:
+        return None
+    if isinstance(value, Decimal):
+        return float(value)
+    return float(value)
 
 
 class JournalEntryListCreateView(generics.ListCreateAPIView):
@@ -261,6 +312,120 @@ def refresh_stats_view(request):
     serializer = TradingStatsSerializer(stats)
     return Response(
         {"message": "Statistics refreshed successfully", "stats": serializer.data}
+    )
+
+
+@api_view(["GET"])
+def dashboard_view(request):
+    """
+    Dashboard analytics for the trading journal UI.
+
+    Query params:
+      - month, year: filter by month
+      - all=true: include all trades
+      - (default): current month
+    """
+    entries, period = _filter_entries_queryset(request)
+    if period is None:
+        return Response({"error": "Invalid month or year"}, status=400)
+
+    entries = list(entries.order_by("date", "created_at"))
+    closed = [e for e in entries if not _is_open_trade(e)]
+
+    wins = [e for e in closed if e.pnl > 0]
+    losses = [e for e in closed if e.pnl < 0]
+    breakeven = [e for e in closed if e.pnl == 0]
+
+    gross_win = sum((e.pnl for e in wins), Decimal("0"))
+    gross_loss = abs(sum((e.pnl for e in losses), Decimal("0")))
+    net_pnl = sum((e.pnl for e in closed), Decimal("0"))
+
+    total_closed = len(closed)
+    win_rate = (len(wins) / total_closed * 100) if total_closed else None
+    # No losses + wins => infinite profit factor (frontend can show ∞)
+    if gross_loss > 0:
+        profit_factor = float(gross_win / gross_loss)
+    elif gross_win > 0:
+        profit_factor = None  # perfect / infinite — signaled via has_wins_no_losses
+    else:
+        profit_factor = None
+    avg_win = float(gross_win / len(wins)) if wins else None
+    avg_loss = float(-(gross_loss / len(losses))) if losses else None
+
+    daily = defaultdict(lambda: Decimal("0"))
+    for entry in closed:
+        if not entry.date:
+            continue
+        key = entry.date.isoformat()
+        daily[key] += entry.pnl
+
+    daily_pnl = [
+        {"date": day, "value": _to_float(value)}
+        for day, value in sorted(daily.items())
+    ]
+    green_days = sum(1 for d in daily_pnl if d["value"] > 0)
+    trading_days = len(daily_pnl)
+    day_win_rate = (
+        (green_days / trading_days * 100) if trading_days else None
+    )
+
+    # Per-trade cumulative so same-day trades still draw a curve
+    running = Decimal("0")
+    cumulative = []
+    for index, entry in enumerate(closed, start=1):
+        running += entry.pnl
+        trade_date = entry.date.isoformat() if entry.date else f"trade-{index}"
+        cumulative.append(
+            {
+                "date": trade_date,
+                "label": f"#{index}",
+                "value": _to_float(running),
+            }
+        )
+
+    buy_count = sum(
+        1 for e in entries if (e.bias or "").lower() == "buy"
+    )
+    sell_count = sum(
+        1 for e in entries if (e.bias or "").lower() == "sell"
+    )
+
+    recent_qs = sorted(
+        entries,
+        key=lambda e: (
+            e.date or datetime.min.date(),
+            e.created_at or datetime.min,
+        ),
+        reverse=True,
+    )[:5]
+    recent = JournalEntrySerializer(recent_qs, many=True).data
+
+    return Response(
+        {
+            "net_pnl": _to_float(net_pnl) or 0,
+            "total_trades": total_closed,
+            "wins": len(wins),
+            "losses": len(losses),
+            "breakeven": len(breakeven),
+            "win_rate": round(win_rate, 2) if win_rate is not None else None,
+            "profit_factor": (
+                round(profit_factor, 2) if profit_factor is not None else None
+            ),
+            "profit_factor_infinite": bool(gross_win > 0 and gross_loss == 0),
+            "avg_win": round(avg_win, 2) if avg_win is not None else None,
+            "avg_loss": round(avg_loss, 2) if avg_loss is not None else None,
+            "day_win_rate": (
+                round(day_win_rate, 2) if day_win_rate is not None else None
+            ),
+            "green_days": green_days,
+            "trading_days": trading_days,
+            "buy_count": buy_count,
+            "sell_count": sell_count,
+            "cumulative": cumulative,
+            "daily_pnl": daily_pnl,
+            "recent": recent,
+            "period": period,
+        }
     )
 
 
